@@ -12,7 +12,7 @@ const messages = fs.readFileSync('kata.txt', 'utf-8')
     .map(m => m.trim())
     .filter(m => m.length > 0);
 
-// Random helper
+// Helper
 function getRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -22,9 +22,16 @@ function randomDelay() {
     return Math.floor(Math.random() * (90000 - 40000 + 1)) + 40000;
 }
 
-// Init client (SUDAH FIX Railway)
+// Delay typing (simulate manusia)
+function typingDelay(text) {
+    return text.length * 100; // 100ms per karakter
+}
+
+// Client
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        dataPath: './session'
+    }),
     puppeteer: {
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
         headless: true,
@@ -37,16 +44,15 @@ const client = new Client({
     }
 });
 
-// QR (RAW biar bisa di-convert)
+// QR → langsung jadi link
 client.on('qr', (qr) => {
-    console.log('\n===== SCAN QR INI =====\n');
-    console.log(qr);
-    console.log('\n=======================\n');
+    console.log('\n🔗 Scan QR di link ini:\n');
+    console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qr}\n`);
 });
 
 // Ready
 client.on('ready', async () => {
-    console.log('Bot siap 🚀\n');
+    console.log('✅ Bot siap (PRO MODE)\n');
 
     while (true) {
         for (let number of numbers) {
@@ -64,7 +70,15 @@ client.on('ready', async () => {
                 }
 
                 console.log(`📤 Kirim ke ${cleanNumber}`);
+
+                const chat = await client.getChatById(chatId);
+
+                // typing simulation
+                await chat.sendStateTyping();
+                await new Promise(res => setTimeout(res, typingDelay(message)));
+
                 await client.sendMessage(chatId, message);
+
                 console.log("✅ Terkirim\n");
 
             } catch (err) {
@@ -76,8 +90,14 @@ client.on('ready', async () => {
             await new Promise(res => setTimeout(res, delay));
         }
 
-        console.log("🔁 Ulang dari awal\n");
+        console.log("🔁 Ulang loop\n");
     }
+});
+
+// Auto reconnect
+client.on('disconnected', (reason) => {
+    console.log('⚠️ Disconnect:', reason);
+    client.initialize();
 });
 
 client.initialize();
